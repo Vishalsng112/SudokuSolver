@@ -2,7 +2,7 @@
 import torch
 import csv
 import numpy as np
-from model import SudokuTransformer, SudokuTransformer_v2
+from model import SudokuTransformer, SudokuTransformerED
 from model import train
 import torch.nn.functional as F
 
@@ -11,7 +11,7 @@ def load_data(inputs, outputs):
     INs = []
     OUTs = []
     # for index in range(len(inputs)):
-    dp = 1
+    dp = 100
     for index in range(dp):
         INs.append([ int(i) for i in str(inputs[index])] )
         OUTs.append([ int(i) for i in str(outputs[index])])
@@ -30,8 +30,9 @@ def load_data(inputs, outputs):
 
 def main():
     model = SudokuTransformer()
-    # model.train()
-    print(model.eval())
+    # model = SudokuTransformerED()
+    model.train()
+    # print(model.eval())
     
     #load data
     inputs = np.load('data/sudoku_inputs.npz')
@@ -53,6 +54,15 @@ def main():
     # create tensor dataset
     train_data = torch.utils.data.TensorDataset(inputs, outputs)
     print(inputs[0])
-    model = train(model = model, train_data= train_data, epochs=10, lr = 0.1)
+    model2 = train(model = model, train_data= train_data, epochs=100, lr = 0.01)
+    
+    #get prediction
+    model2.eval()
 
+    inn = inputs[0].reshape(1,-1)  
+    pred = model2(inn)
+    pred = torch.argmax(pred, dim=-1)
+    print(inputs[0].reshape(1,-1))
+    print(pred)
+    print(pred[0] - inn)
 main()
