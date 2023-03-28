@@ -4,9 +4,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 class SudokuTransformer(nn.Module):
-    def __init__(self, d_model=10, num_layers=1, num_heads=10, dropout=0.1):
+    def __init__(self, d_model=10, num_layers=6, num_heads=2, dropout=0.1):
+        """
+        d_model: dimension of the model
+        num_layers: number of transformer encoder layers
+        num_heads: number of heads in multi-head attention
+        dropout: dropout rate
+        """
         super().__init__()
         self.d_model = d_model
         self.num_layers = num_layers
@@ -20,24 +26,24 @@ class SudokuTransformer(nn.Module):
 
         # Transformer encoder layers
         self.transformer_layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(d_model=d_model, nhead=num_heads, dropout=dropout)
+            nn.TransformerEncoderLayer(d_model=d_model, nhead=num_heads, batch_first = True, norm_first = True, dim_feedforward = d_model*4)#, dropout=dropout)
             for _ in range(num_layers)
         ])
 
         # Output linear layer
         self.out = nn.Linear(d_model, 10)
 
+        # self.transformer_decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=num_layers)
+        # self.linear = nn.Linear(d_model, 10)
 
 
-    def forward(self, x):
+
+    def forward(self, x, attention_mask=None):
             # Input shape: (batch_size, 81)
-
-            # convert x into long tensor
-            # x = x.long()
-            # Convert input to one-hot encoding
-
-            x_one_hot = F.one_hot(x.long(), num_classes=10).float()  # Shape: (batch_size, 81, 10)
             
+            #get one hot encoding of input
+            x_one_hot = F.one_hot(x.long(), num_classes=10).float()  # Shape: (batch_size, 81, 10)
+            # print('x_one_hot', x_one_hot.shape)
             # print(self.pos_enc.shape)
 
             # print('embedding shape', self.embedding(x_one_hot.argmax(dim=-1)).shape)
@@ -57,19 +63,29 @@ class SudokuTransformer(nn.Module):
 
             # print('Positional emcoding is done  ')
             # Create mask to prevent modifying already filled cells
-            mask = x_one_hot.sum(dim=-1).bool()  # Shape: (batch_size, 81)
-            # print('x_one_hot', x_one_hot)
-            # print('MASK', mask)
-            # print('MASK shape', mask.shape)
-            # Transformer encoder
+            # print(x_one_hot.shape)
+            # mask = x_one_hot.sum(dim=-1).bool()  # Shape: (batch_size, 81)
+            # fill mask with 1s where endocing on digit 0 is present
+            #create a mask of 0s
+            # mask = torch.zeros(x_one_hot.shape[0], x_one_hot.shape[1], dtype=torch.bool)
+            # mask = mask |(x_one_hot[:, :, 0] == 1)
+            
+            # print(mask)
+            # #permute mask to match the shape of x
+            # mask = mask.permute(1, 0)
+            # print(mask.shape)
+            # # Transformer encoder
+
+            # print('X embedding', x.shape)
+            # print(mask.shape)
             for i in range(self.num_layers):
-                x = self.transformer_layers[i](x)#, src_key_padding_mask=mask)
+                # x = self.transformer_layers[i](x, src_key_padding_mask=mask)
+                x = self.transformer_layers[i](x, src_key_padding_mask= ~attention_mask)
                 assert x.dtype == torch.float32
             # print('learned encoding', x[0][position])
             # print('Running till here')
             # Output layer
             x = self.out(x)  # Shape: (batch_size, 81, 9)
-
             # assert x.dtype == torch.float32
 
             # # Mask out already filled cells
@@ -82,7 +98,7 @@ class SudokuTransformer(nn.Module):
             # print(x.shape)
 
             #apply softmax to get probability distribution
-            x = F.softmax(x, dim=-1)
+            # x = F.softmax(x, dim=-1)
             return x
 
     def get_positional_encoding(self, length, d_model):
@@ -102,15 +118,24 @@ def train(model, train_data, epochs = 10, lr = 0.001):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
     
+    epoch_loss = []
     for epoch in range(epochs):
         # print('Epoch', epoch)
         total_loss = 0
         for input, target in train_data:
+
+            #compute attention mask for input
+            attention_mask = (input != 0).bool()
+            # print(input.shape)
+            # print(attention_mask.shape)
+            # print(attention_mask)
             # print(input.shape)
             # print(output.shape)
             assert input.dtype == torch.float32
             assert target.dtype == torch.float32
-            output = model(input)
+
+            # print(input.shape)
+            output = model(input, attention_mask = attention_mask)
 
             assert output.dtype == torch.float32
             # #print input and ooutput shape to console in pretty format  
@@ -127,6 +152,13 @@ def train(model, train_data, epochs = 10, lr = 0.001):
             # print('taget structure : ', target.shape)
             # print(torch.max(output), torch.min(output))
             # print(torch.max(target), torch.min(target))
+            # loss = loss_fn(output.view(-1, 10), target.view(-1, 10))
+            
+            #permute the output and target to match the shape of loss function
+            output = output.permute(0, 2, 1)
+            target = target.permute(0, 2, 1)
+
+            #compute loss
             loss = loss_fn(output, target)
             # print(loss)
             optimizer.zero_grad()
@@ -134,6 +166,15 @@ def train(model, train_data, epochs = 10, lr = 0.001):
             optimizer.step()
             total_loss += loss.item()
         print(f"Epoch {epoch + 1}, Loss: {total_loss / len(train_data):.4f}")
+        epoch_loss.append(total_loss / len(train_data))
+    #plot loss
+    fig, axs = plt.subplots(1, 1, figsize=(10, 5))
+    axs.plot(epoch_loss)
+    axs.set_title('Loss')
+    axs.set_xlabel('Epoch')
+    axs.set_ylabel('Loss')
+    #save plot 
+    plt.savefig('loss.png')
     return model
 
 import torch
