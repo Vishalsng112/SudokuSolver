@@ -2,16 +2,17 @@
 import torch
 import csv
 import numpy as np
-from model import SudokuTransformer, SudokuTransformerED
+from model import SudokuTransformer, SudokuTransformerED, BiDirectionalSudokuTransformer
 from model import train
 import torch.nn.functional as F
 import gc
+import pickle 
 
 def load_data(inputs, outputs):
     INs = []
     OUTs = []
     # for index in range(len(inputs)):
-    dp = 32
+    dp = 64
     for index in range(dp):
         print('{}/{}'.format(index, dp))
         INs.append([ int(i) for i in str(inputs[index])] )
@@ -88,6 +89,8 @@ def RearrangeData(inputs, outputs):
 
 def main():
     model = SudokuTransformer()
+    # model = SudokuTransformerED()
+    # model = BiDirectionalSudokuTransformer()
     model.train()
     
     #load data
@@ -106,17 +109,20 @@ def main():
     print(outputs[0])
     # print(1/0)
 
+    inputs, outputs = pretraining()
     # create tensor dataset
     train_data = torch.utils.data.TensorDataset(inputs, outputs)
 
     #create dataloader
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=64, shuffle=False)
     print(inputs[0])
     print(outputs[0])
     del inputs, outputs
     gc.collect()
 
-    model2 = train(model = model, train_data= train_loader, epochs=400, lr = 0.01)
+    model2 = train(model = model, train_data= train_loader, epochs=50, lr = 0.01)
+
+    pickle.dump(model2, open('model/sudoku_transformer.pkl', 'wb'))
 
     #id model folder does not exist, create it
     import os
@@ -137,15 +143,23 @@ def main():
     # print(pred[0] - inn)
 
 def test():
-    #load INs and OUTs
-    INs = np.load('data/INs.npz')
-    INs = INs.f.arr_0
-    OUTs = np.load('data/OUTs.npz')
-    OUTs = OUTs.f.arr_0
-
+    if False:
+        #load INs and OUTs
+        INs = np.load('data/INs.npz')
+        INs = INs.f.arr_0
+        OUTs = np.load('data/OUTs.npz')
+        OUTs = OUTs.f.arr_0
+    else:
+        #load INs and OUTs
+        INs = np.load('data/sudoku_inputs_pretrain.npz')
+        INs = INs.f.arr_0
+        OUTs = np.load('data/sudoku_outputs_pretrain.npz')
+        OUTs = OUTs.f.arr_0
     #load model
-    model = SudokuTransformer()
-    model.load_state_dict(torch.load('model/sudoku_transformer.pth'))
+    # model = SudokuTransformer()
+    # model.load_state_dict(torch.load('model/sudoku_transformer.pth'))
+    # model.eval()
+    model = pickle.load(open('model/sudoku_transformer.pkl', 'rb'))
     model.eval()
     print(model.eval())
     pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -158,6 +172,8 @@ def test():
     # get accuracy
     correct =  0
     total = len(INs)
+
+    accuracies = []
     for index in range(len(INs)):
         #prepare attention mask
         attention_mask = INs[index].reshape(1,-1) != 0
@@ -172,6 +188,12 @@ def test():
         if (pred == target).all():
             #increase accuracy
             correct += 1
+
+        #get indices where input is 0
+        indices = torch.where(input == 0)[0]
+        #check how many predictions are correct
+        count = (pred[indices] == target[indices]).sum().item()
+        accuracies.append(count/(81-indices.shape[0]))
         #convert input to type int
         input = input.type(torch.IntTensor)
         #convert pred to type int
@@ -201,7 +223,45 @@ def test():
 
         # assert((pred[indices] == input[indices]).all())
         # print(pred.shape)
+    print(accuracies)
     print('Accuracy: {}'.format(correct/total))  
+    print(np.mean(accuracies))
           
+# main()
+# test()
+
+def pretraining():
+    import copy
+    #load inputs and outputs
+    inputs = np.load('data/sudoku_inputs.npz')
+    inputs = inputs.f.arr_0
+    outputs = np.load('data/sudoku_outputs.npz')
+    outputs = outputs.f.arr_0
+    inputs, outputs =load_data(inputs=inputs, outputs=outputs)
+    inputs,outputs = RearrangeData(inputs, outputs)
+    
+    inputs = copy.deepcopy(outputs)
+    print(outputs.shape)
+    total = len(outputs)
+    for i in range(total):
+        #fill 10% outputs with 0
+        #get random indices
+        indices = np.random.choice(81, 5, replace=False)
+        # print(indices)
+        #fill outputs with 0
+        inputs[i][indices] = 0
+    
+    #save inputs and outputs
+    np.savez_compressed('data/sudoku_inputs_pretrain.npz', inputs)
+    np.savez_compressed('data/sudoku_outputs_pretrain.npz', outputs)
+
+    for i in range(10):
+        print(inputs[i])
+        print(outputs[i])
+        print("------------------")
+    return inputs, outputs
+
+
+# pretraining()
 main()
 test()
