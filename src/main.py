@@ -12,7 +12,7 @@ def load_data(inputs, outputs):
     INs = []
     OUTs = []
     # for index in range(len(inputs)):
-    dp = 64
+    dp = 1024
     for index in range(dp):
         print('{}/{}'.format(index, dp))
         INs.append([ int(i) for i in str(inputs[index])] )
@@ -114,13 +114,13 @@ def main():
     train_data = torch.utils.data.TensorDataset(inputs, outputs)
 
     #create dataloader
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=64, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
     print(inputs[0])
     print(outputs[0])
     del inputs, outputs
     gc.collect()
 
-    model2 = train(model = model, train_data= train_loader, epochs=50, lr = 0.01)
+    model2 = train(model = model, train_data= train_loader, epochs=100, lr = 0.001)
 
     pickle.dump(model2, open('model/sudoku_transformer.pkl', 'wb'))
 
@@ -246,7 +246,7 @@ def pretraining():
     for i in range(total):
         #fill 10% outputs with 0
         #get random indices
-        indices = np.random.choice(81, 5, replace=False)
+        indices = np.random.choice(81, 10, replace=False)
         # print(indices)
         #fill outputs with 0
         inputs[i][indices] = 0
@@ -259,7 +259,9 @@ def pretraining():
         print(inputs[i])
         print(outputs[i])
         print("------------------")
-    return inputs, outputs
+    #return inputs, outputs as LONG TENSOR
+    return torch.from_numpy(inputs.numpy()).long(), torch.from_numpy(outputs.numpy()).long()
+    # return inputs, outputs
 
 
 # pretraining()

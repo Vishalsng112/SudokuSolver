@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 class SudokuTransformer(nn.Module):
-    def __init__(self, d_model=10, num_layers=1, num_heads=1, dropout=0.1):
+    def __init__(self, d_model=10, num_layers=6, num_heads=1, dropout=0.0):
         """
         d_model: dimension of the model
         num_layers: number of transformer encoder layers
@@ -142,13 +142,13 @@ def train(model, train_data, epochs = 10, lr = 0.001):
             # print(attention_mask)
             # print(input.shape)
             # print(output.shape)
-            assert input.dtype == torch.float32
-            assert target.dtype == torch.float32
+            # assert input.dtype == torch.float32
+            # assert target.dtype == torch.float32
 
             # print(input.shape)
             output = model(input)#, attention_mask = attention_mask)
 
-            assert output.dtype == torch.float32
+            # assert output.dtype == torch.float32
             # #print input and ooutput shape to console in pretty format  
             # print('Input shape', input.shape)
             # print('Output shape', output.shape)
