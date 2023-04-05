@@ -12,7 +12,7 @@ def load_data(inputs, outputs):
     INs = []
     OUTs = []
     # for index in range(len(inputs)):
-    dp = 1024
+    dp = 10000
     for index in range(dp):
         print('{}/{}'.format(index, dp))
         INs.append([ int(i) for i in str(inputs[index])] )
@@ -122,6 +122,10 @@ def main():
 
     model2 = train(model = model, train_data= train_loader, epochs=100, lr = 0.001)
 
+    #if model folder does not exist, create it
+    import os
+    if not os.path.exists('model'):
+        os.makedirs('model')
     pickle.dump(model2, open('model/sudoku_transformer.pkl', 'wb'))
 
     #id model folder does not exist, create it
@@ -192,8 +196,12 @@ def test():
         #get indices where input is 0
         indices = torch.where(input == 0)[0]
         #check how many predictions are correct
+        # count = (pred[indices] == target[indices]).sum().item()
+        # accuracies.append(count/(indices.shape[0]))
+        
         count = (pred[indices] == target[indices]).sum().item()
-        accuracies.append(count/(81-indices.shape[0]))
+        accuracies.append(count/(indices.shape[0]))
+
         #convert input to type int
         input = input.type(torch.IntTensor)
         #convert pred to type int
@@ -203,6 +211,7 @@ def test():
         print(input.reshape(9,9))
         print(pred.reshape(9,9))
         print(target.reshape(9,9))
+        print(1*(input.reshape(9,9) != pred.reshape(9,9)))
         indices = torch.where(input != 0)[0]
         print(indices.shape)
         print(input[indices])
@@ -225,7 +234,7 @@ def test():
         # print(pred.shape)
     print(accuracies)
     print('Accuracy: {}'.format(correct/total))  
-    print(np.mean(accuracies))
+    print(np.median(accuracies))
           
 # main()
 # test()
@@ -255,7 +264,7 @@ def pretraining():
     np.savez_compressed('data/sudoku_inputs_pretrain.npz', inputs)
     np.savez_compressed('data/sudoku_outputs_pretrain.npz', outputs)
 
-    for i in range(10):
+    for i in range(2):
         print(inputs[i])
         print(outputs[i])
         print("------------------")

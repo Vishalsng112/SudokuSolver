@@ -26,7 +26,7 @@ class SudokuTransformer(nn.Module):
 
         # Transformer encoder layers
         self.transformer_layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(d_model=d_model, nhead=num_heads, batch_first = True, norm_first = True, dim_feedforward = d_model*4, dropout=dropout)
+            nn.TransformerEncoderLayer(d_model=d_model, nhead=num_heads, batch_first = True, norm_first = False, dim_feedforward = d_model*4, dropout=dropout)
             for _ in range(num_layers)
         ])
 
@@ -39,10 +39,16 @@ class SudokuTransformer(nn.Module):
 
 
     def forward(self, x, attention_mask=None):
-            # Input shape: (batch_size, 81)
             
+            # Input shape: (batch_size, 81)
             #get one hot encoding of input
             x_one_hot = F.one_hot(x.long(), num_classes=10).float()  # Shape: (batch_size, 81, 10)
+            
+            #get the mask where input is 0
+            mask = ~(torch.argmax(x_one_hot, dim=-1).bool())  # Shape: (batch_size, 81)
+
+            # print('mask', mask)
+            # print(1/0)
             # print('x_one_hot', x_one_hot.shape)
             # print(self.pos_enc.shape)
 
@@ -109,6 +115,12 @@ class SudokuTransformer(nn.Module):
 
             #apply softmax to get probability distribution
             # x = F.softmax(x, dim=-1)
+            # print(mask.shape)
+            # print(torch.zeros_like(x))
+            # print(mask[..., None])
+            # print(x.shape, x_one_hot.shape)
+            x = torch.where(mask[..., None], x, x_one_hot)
+
             return x
 
     def get_positional_encoding(self, length, d_model):
@@ -119,6 +131,7 @@ class SudokuTransformer(nn.Module):
         pos_enc[:, 0::2] = torch.sin(position * div_term)
         pos_enc[:, 1::2] = torch.cos(position * div_term)
         return pos_enc
+
     
 
 import torch.optim as optim
