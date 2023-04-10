@@ -7,12 +7,17 @@ from model import train
 import torch.nn.functional as F
 import gc
 import pickle 
+import time 
+from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
 
 def load_data(inputs, outputs):
     INs = []
     OUTs = []
+
+    # dp = len(inputs)
     # for index in range(len(inputs)):
-    dp = 10000
+    dp = 500000
     for index in range(dp):
         print('{}/{}'.format(index, dp))
         INs.append([ int(i) for i in str(inputs[index])] )
@@ -41,17 +46,17 @@ def RearrangeData(inputs, outputs):
     outputs = outputs.numpy()
     newInputs = []
     newOutputs = []
-    print(inputs.shape, outputs.shape)
+    # print(inputs.shape, outputs.shape)
     for inp, out in zip(inputs, outputs):
         #map first row of the output from 1 to 9
         Map = {}
         inp = inp.reshape(9,9)
         out = out.reshape(9,9)
-        print(inp)
-        print(out)
+        # print(inp)
+        # print(out)
         for index, value in enumerate(out[0]):
             Map[value] = index + 1
-        print(Map)
+        # print(Map)
         #remap the output
         newOut = []
         for row in out:
@@ -114,13 +119,13 @@ def main():
     train_data = torch.utils.data.TensorDataset(inputs, outputs)
 
     #create dataloader
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=64, shuffle=True)
     print(inputs[0])
     print(outputs[0])
     del inputs, outputs
     gc.collect()
 
-    model2 = train(model = model, train_data= train_loader, epochs=100, lr = 0.001)
+    model2 = train(model = model, train_data= train_loader, epochs=20, lr = 0.001)
 
     #if model folder does not exist, create it
     import os
@@ -147,6 +152,7 @@ def main():
     # print(pred[0] - inn)
 
 def test():
+    start = time.time()
     if False:
         #load INs and OUTs
         INs = np.load('data/INs.npz')
@@ -178,7 +184,8 @@ def test():
     total = len(INs)
 
     accuracies = []
-    for index in range(len(INs)):
+    # for index in range(1000):
+    for index in range(INs.shape[0]):
         #prepare attention mask
         attention_mask = INs[index].reshape(1,-1) != 0
         pred = model(INs[index].reshape(1,-1), attention_mask = attention_mask)
@@ -186,12 +193,18 @@ def test():
         input = INs[index].reshape(-1)
         pred = pred.reshape(-1)
         target = OUTs[index].reshape(-1)
-        print(pred.shape, target.shape)
+        # print(pred.shape, target.shape)
         assert(pred.shape == target.shape)
         #if prediction is correct
         if (pred == target).all():
             #increase accuracy
             correct += 1
+        # else:
+        #     print(input.reshape(9,9))
+        #     print(pred.reshape(9,9))
+        #     print(target.reshape(9,9))
+        #     print(1*(input.reshape(9,9) == pred.reshape(9,9)))
+        #     print(1/0)
 
         #get indices where input is 0
         indices = torch.where(input == 0)[0]
@@ -208,33 +221,35 @@ def test():
         pred = pred.type(torch.IntTensor)
         #convert target to type int
         target = target.type(torch.IntTensor)
-        print(input.reshape(9,9))
-        print(pred.reshape(9,9))
-        print(target.reshape(9,9))
-        print(1*(input.reshape(9,9) != pred.reshape(9,9)))
+        # print(input.reshape(9,9))
+        # print(pred.reshape(9,9))
+        # print(target.reshape(9,9))
+        # print(1*(input.reshape(9,9) != pred.reshape(9,9)))
         indices = torch.where(input != 0)[0]
-        print(indices.shape)
-        print(input[indices])
-        print(pred[indices])
+        # print(indices.shape)
+        # print(input[indices])
+        # print(pred[indices])
 
         #create output if not exists
         # path = 'output/train/{}/'.format(index)
         # if not os.path.exists(path):
         #     os.makedirs(path)
-        import os 
-        if not os.path.exists('output'):
-            os.makedirs('output')
-        # save input output and prediction as csv text file
-        np.savetxt('output/{}_input.csv'.format(index), input.reshape(9,9), delimiter=',', fmt='%d')
-        np.savetxt('output/{}_prediction.csv'.format(index), pred.reshape(9,9), delimiter=',', fmt='%d')
-        np.savetxt('output/{}_target.csv'.format(index), target.reshape(9,9), delimiter=',', fmt='%d')
+        # import os 
+        # if not os.path.exists('output'):
+        #     os.makedirs('output')
+        # # save input output and prediction as csv text file
+        # np.savetxt('output/{}_input.csv'.format(index), input.reshape(9,9), delimiter=',', fmt='%d')
+        # np.savetxt('output/{}_prediction.csv'.format(index), pred.reshape(9,9), delimiter=',', fmt='%d')
+        # np.savetxt('output/{}_target.csv'.format(index), target.reshape(9,9), delimiter=',', fmt='%d')
 
 
         # assert((pred[indices] == input[indices]).all())
         # print(pred.shape)
     print(accuracies)
     print('Accuracy: {}'.format(correct/total))  
-    print(np.median(accuracies))
+    print(np.mean(accuracies))
+    end = time.time()
+    print('Time: {}'.format(end-start))
           
 # main()
 # test()
@@ -252,10 +267,11 @@ def pretraining():
     inputs = copy.deepcopy(outputs)
     print(outputs.shape)
     total = len(outputs)
+    rng = np.random.RandomState(42)
     for i in range(total):
         #fill 10% outputs with 0
         #get random indices
-        indices = np.random.choice(81, 10, replace=False)
+        indices = rng.choice(81, 10, replace=False)
         # print(indices)
         #fill outputs with 0
         inputs[i][indices] = 0
@@ -273,6 +289,17 @@ def pretraining():
     # return inputs, outputs
 
 
+def create_train_test_data(inputs, outputs):
+    #split data into train and test
+    train_inputs, test_inputs, train_outputs, test_outputs = train_test_split(inputs, outputs, test_size=0.2, random_state=42)
+    #convert to tensor
+    train_inputs = torch.from_numpy(train_inputs.numpy()).long()
+    train_outputs = torch.from_numpy(train_outputs.numpy()).long()
+    test_inputs = torch.from_numpy(test_inputs.numpy()).long()
+    test_outputs = torch.from_numpy(test_outputs.numpy()).long()
+    #return train and test data
+    return train_inputs, test_inputs, train_outputs, test_outputs
+
 # pretraining()
-main()
+# main()
 test()

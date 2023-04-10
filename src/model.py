@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 class SudokuTransformer(nn.Module):
-    def __init__(self, d_model=10, num_layers=6, num_heads=1, dropout=0.0):
+    def __init__(self, d_model=10, num_layers=10, num_heads=1, dropout=0.0):
         """
         d_model: dimension of the model
         num_layers: number of transformer encoder layers
@@ -32,6 +32,9 @@ class SudokuTransformer(nn.Module):
 
         # Output linear layer
         self.out = nn.Linear(d_model, 10)
+        self.out_1 = nn.Linear(d_model, 1024)
+        self.out_2 = nn.Linear(1024, 10)
+
 
         # self.transformer_decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=num_layers)
         # self.linear = nn.Linear(d_model, 10)
@@ -101,7 +104,10 @@ class SudokuTransformer(nn.Module):
             # print('learned encoding', x[0][position])
             # print('Running till here')
             # Output layer
+            
             x = self.out(x)  # Shape: (batch_size, 81, 9)
+            # x = self.out_2(F.relu(self.out_1(x)))
+
             # assert x.dtype == torch.float32
 
             # # Mask out already filled cells
