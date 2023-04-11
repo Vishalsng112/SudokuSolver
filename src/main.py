@@ -300,6 +300,9 @@ def create_train_test_data(inputs, outputs):
     #return train and test data
     return train_inputs, test_inputs, train_outputs, test_outputs
 
+
+def test_new():
+    
 # pretraining()
 # main()
 test()

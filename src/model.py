@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import time 
+
 class SudokuTransformer(nn.Module):
     def __init__(self, d_model=10, num_layers=10, num_heads=1, dropout=0.0):
         """
@@ -149,9 +151,11 @@ def train(model, train_data, epochs = 10, lr = 0.001):
     #use MSE as loss function
     # loss_fn = nn.MSELoss()
     epoch_loss = []
+    time_list = []
     for epoch in range(epochs):
         # print('Epoch', epoch)
         total_loss = 0
+        current_time = time.time()
         for input, target in train_data:
 
             #compute attention mask for input
@@ -197,6 +201,11 @@ def train(model, train_data, epochs = 10, lr = 0.001):
             total_loss += loss.item()
         print(f"Epoch {epoch + 1}, Loss: {total_loss / len(train_data):.4f}")
         epoch_loss.append(total_loss / len(train_data))
+        elapsed_time = time.time() - current_time
+        time_list.append(elapsed_time)
+        print(f"Time taken for 1 epoch: {elapsed_time:.2f} seconds")
+        print("**********")
+
     #plot loss
     fig, axs = plt.subplots(1, 1, figsize=(10, 5))
     axs.plot(epoch_loss)
@@ -205,6 +214,15 @@ def train(model, train_data, epochs = 10, lr = 0.001):
     axs.set_ylabel('Loss')
     #save plot 
     plt.savefig('loss.png')
+
+    # #create plot for time taken for each epoch
+    # fig, axs = plt.subplots(1, 1, figsize=(10, 5))
+    # axs.plot(time_list)
+    # axs.set_title('Time taken for each epoch')
+    # axs.set_xlabel('Epoch')
+    # axs.set_ylabel('Time')
+    # #save plot
+    # plt.savefig('time.png')
     return model
 
 import torch
