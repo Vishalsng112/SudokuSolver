@@ -169,7 +169,7 @@ def train(model, train_data, epochs = 10, lr = 0.001):
             # assert target.dtype == torch.float32
 
             # print(input.shape)
-            output = model(input)#, attention_mask = attention_mask)
+            output, attention  = model(input)#, attention_mask = attention_mask)
 
             # assert output.dtype == torch.float32
             # #print input and ooutput shape to console in pretty format  
@@ -330,6 +330,83 @@ class BiDirectionalSudokuTransformer(nn.Module):
             # print("Hello World")
         x = self.out(x)
         return x
+
+    def get_positional_encoding(self, length, d_model):
+        # Compute positional encoding as described in the paper
+        position = torch.arange(length, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pos_enc = torch.zeros((length, d_model))
+        pos_enc[:, 0::2] = torch.sin(position * div_term)
+        pos_enc[:, 1::2] = torch.cos(position * div_term)
+        return pos_enc
+
+
+class SudokuTransformerATTENTION(nn.Module):
+    def __init__(self, d_model=10, num_layers=10, num_heads=1, dropout=0.0):
+        """
+        d_model: dimension of the model
+        num_layers: number of transformer encoder layers
+        num_heads: number of heads in multi-head attention
+        dropout: dropout rate
+        """
+        super().__init__()
+        self.d_model = d_model
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+
+        # Positional encoding layer
+        self.pos_enc = nn.Parameter(self.get_positional_encoding(81, d_model), requires_grad=False)
+
+        # Input embedding layer
+        self.embedding = nn.Embedding(num_embeddings=10, embedding_dim=d_model)
+
+        # Transformer encoder layers
+        self.transformer_layers = nn.ModuleList([
+            nn.TransformerEncoderLayer(d_model=d_model, nhead=num_heads, batch_first=True, norm_first=False, dim_feedforward=d_model*4, dropout=dropout)
+            for _ in range(num_layers - 1)  # leave out the last layer for now
+        ])
+
+        # Multi-head attention layer
+        self.multi_head_attn = nn.MultiheadAttention(embed_dim=d_model, num_heads=num_heads)
+
+        self.transformer_multi_head_attn_layers = nn.ModuleList([
+            nn.MultiheadAttention(embed_dim=d_model, num_heads=num_heads, batch_first=True)
+            for _ in range(num_layers)  # leave out the last layer for now
+        ])
+        # Output linear layer
+        self.out = nn.Linear(d_model, 10)
+        self.out_1 = nn.Linear(d_model, 1024)
+        self.out_2 = nn.Linear(1024, 10)
+
+
+        # self.transformer_decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=num_layers)
+        # self.linear = nn.Linear(d_model, 10)
+
+
+    def forward(self, x, attention_mask=None):
+        #get one hot encoding of input
+        x_one_hot = F.one_hot(x.long(), num_classes=10).float()  # Shape: (batch_size, 81, 10)
+        
+        #get the mask where input is 0
+        mask = ~(torch.argmax(x_one_hot, dim=-1).bool())  # Shape: (batch_size, 81)
+
+        x = x_one_hot + self.pos_enc[:x.shape[1], :].unsqueeze(0)
+        attn_scores_list = []
+        # for i in range(self.num_layers - 1):
+        #     x = self.transformer_layers[i](x)#, src_key_padding_mask= ~attention_mask)
+
+        # # compute attention scores for last layer
+        # x, attn_scores = self.multi_head_attn(x, x, x, attn_mask=None)
+
+        for i in range(self.num_layers):
+            x, attn_scores = self.transformer_multi_head_attn_layers[i](x, x, x, attn_mask=None)
+            # print(torch.unique(attn_scores.reshape(-1)))
+            attn_scores_list.append(attn_scores)
+
+        x = self.out(x)  # Shape: (batch_size, 81, 9)
+        x = torch.where(mask[..., None], x, x_one_hot)
+
+        return x, attn_scores_list
 
     def get_positional_encoding(self, length, d_model):
         # Compute positional encoding as described in the paper
