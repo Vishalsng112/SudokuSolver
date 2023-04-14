@@ -43,7 +43,7 @@ class SudokuTransformer(nn.Module):
 
 
 
-    def forward(self, x, attention_mask=None):
+    def forward(self, x, test = False, attention_mask=None):
             
             # Input shape: (batch_size, 81)
             #get one hot encoding of input
@@ -99,10 +99,20 @@ class SudokuTransformer(nn.Module):
 
             # print('X embedding', x.shape)
             # print(mask.shape)
+            x_temp = x
+            attention_score_list = []
             for i in range(self.num_layers):
                 # x = self.transformer_layers[i](x, src_key_padding_mask=mask)
-                x = self.transformer_layers[i](x)#, src_key_padding_mask= ~attention_mask)
+                x = self.transformer_layers[i](x_temp)#, src_key_padding_mask= ~attention_mask)
                 # assert x.dtype == torch.float32
+                if test:
+                    with torch.no_grad():
+                        output_, attention_score = self.transformer_layers[i].self_attn(x_temp, x_temp, x_temp)
+                        attention_score_list.append(attention_score)
+                else:
+                    attention_score_list.append(None)
+                x_temp = x
+
             # print('learned encoding', x[0][position])
             # print('Running till here')
             # Output layer
@@ -129,7 +139,7 @@ class SudokuTransformer(nn.Module):
             # print(x.shape, x_one_hot.shape)
             x = torch.where(mask[..., None], x, x_one_hot)
 
-            return x
+            return x, attention_score_list
 
     def get_positional_encoding(self, length, d_model):
         # Compute positional encoding as described in the paper
