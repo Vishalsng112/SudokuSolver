@@ -291,39 +291,65 @@ class Sudoku:
 
         accuracies = []
         # for index in range(1000):
-        for index in range(1):
+        for index in range(10000):
             #prepare attention mask
             attention_mask = INs[index].reshape(1,-1) != 0
             with torch.no_grad():
-                pred, attention_scores = model(INs[index].reshape(1,-1), attention_mask = attention_mask)
+                pred, attention_scores = model(INs[index].reshape(1,-1), attention_mask = attention_mask, test = True)
+            # print(attention_scores)
             # print([scrs.reshape(-1) for scrs in attention_scores])
             print(attention_scores[0].reshape(-1).numpy().tolist())
             print(attention_scores[0].shape)
+
+
+            # get the attention scores sum of each row
+            attention_scores = attention_scores[0].reshape(81,81)
+            attention_scores = attention_scores.detach().numpy()
+
+            #for rach row get the sum of the attention scores
+            attention_scores = np.sum(attention_scores, axis=0)
+
+            print(attention_scores)
+
+            #get index of max attention score
+            max_index = np.argmax(attention_scores)
+            print(max_index)
+            # print max index in 2D format
+            print('max index: {}'.format((max_index//9, max_index%9)))
+
+
+
+            # attention_scores = np.sum(attention_scores, axis=1)
+
+            # print(attention_scores)
+
+
             # #create a heatmeap of the attention scores
             # attention_scores = attention_scores[-1].reshape(81,81)
             # attention_scores = attention_scores.detach().numpy()
             # #plot as heatmap
-            import seaborn as sns
-            import matplotlib.pyplot as plt
-            # sns.heatmap(attention_scores)
-            # #save plot
-            # plt.savefig('attention_scores.png')
+            # import seaborn as sns
+            # import matplotlib.pyplot as plt
+            # # sns.heatmap(attention_scores)
+            # # #save plot
+            # # plt.savefig('attention_scores.png')
 
-            #for each attention score, create a heatmap
-            for i in range(len(attention_scores)):
-                fig, ax = plt.subplots(1,1)
-                #plot as heatmap
-                sns.heatmap(attention_scores[i].reshape(81,81).detach().numpy())
-                #save plot
-                plt.savefig('attention_scores_{}.png'.format(i))
-                plt.close()
-            #create a hemap plot of input sudoku and label the numbers
+            # #for each attention score, create a heatmap
+            # for i in range(len(attention_scores)):
+            #     fig, ax = plt.subplots(1,1)
+            #     #plot as heatmap
+            #     sns.heatmap(attention_scores[i].reshape(81,81).detach().numpy())
+            #     #save plot
+            #     plt.savefig('attention_scores_{}.png'.format(i))
+            #     plt.close()
+            # #create a hemap plot of input sudoku and label the numbers
             print(INs[index].reshape(9,9))
 
 
             pred = torch.argmax(pred, dim=-1)
             input = INs[index].reshape(-1)
             pred = pred.reshape(-1)
+            print(pred.reshape(9,9))
             target = OUTs[index].reshape(-1)
             # print(pred.shape, target.shape)
             assert(pred.shape == target.shape)
@@ -331,6 +357,8 @@ class Sudoku:
             if (pred == target).all():
                 #increase accuracy
                 correct += 1
+                if correct > 2: 
+                    print(1/0)
 
             #get indices where input is 0
             indices = torch.where(input == 0)[0]
