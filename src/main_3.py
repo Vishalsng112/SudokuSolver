@@ -289,60 +289,168 @@ class Sudoku:
         correct =  0
         total = len(INs)
 
+        import os
+        if not os.path.exists('output'):
+            os.makedirs('output')
+        
         accuracies = []
         # for index in range(1000):
-        for index in range(10000):
+        for index in range(10):
             #prepare attention mask
             attention_mask = INs[index].reshape(1,-1) != 0
             with torch.no_grad():
-                pred, attention_scores = model(INs[index].reshape(1,-1), attention_mask = attention_mask, test = True)
+                pred, attention_scores_list = model(INs[index].reshape(1,-1), attention_mask = attention_mask, test = True)
             # print(attention_scores)
             # print([scrs.reshape(-1) for scrs in attention_scores])
-            print(attention_scores[0].reshape(-1).numpy().tolist())
-            print(attention_scores[0].shape)
+
+            temp_outpath = 'output/data_{}/'.format(index)
+            if not os.path.exists(temp_outpath):
+                os.makedirs(temp_outpath)
+            
+            #get the attention of last layer
+            attention_scores = attention_scores_list[-1]
+            attention_scores  = attention_scores.reshape(81, 81)
+
+            #for each unfilled cells, extract the attention scores
+            unfilled_cells = np.where(INs[index].reshape(1,-1) == 0)[1]
 
 
-            # get the attention scores sum of each row
-            attention_scores = attention_scores[0].reshape(81,81)
-            attention_scores = attention_scores.detach().numpy()
+            #create a hetmap plot of each empty cell
+            for i_empty, cell in enumerate(unfilled_cells):
+                scores = attention_scores[cell]
+                scores = scores.reshape(9,9)
+                import matplotlib.pyplot as plt
+                
+                #create a figure
+                fig, ax = plt.subplots()
 
-            #for rach row get the sum of the attention scores
-            attention_scores = np.sum(attention_scores, axis=0)
+                #create a heatmap using seaborn
+                import seaborn as sns
+                sns.heatmap(scores, annot=True, ax = ax, cmap='gray', fmt='.2f', annot_kws={"size": 8}) # font size
+                #save the figure
+                plt.savefig(temp_outpath + 'heatmap_{}_{}.png'.format(cell //9, cell % 9), bbox_inches='tight')
+                plt.close()
 
-            print(attention_scores)
-
-            #get index of max attention score
-            max_index = np.argmax(attention_scores)
-            print(max_index)
-            # print max index in 2D format
-            print('max index: {}'.format((max_index//9, max_index%9)))
-
-
-
-            # attention_scores = np.sum(attention_scores, axis=1)
-
-            # print(attention_scores)
+            
+            
+            # #for each attentions score create a heatmap
+            # for i, attention_scores in enumerate(attention_scores_list):
+            #     print(attention_scores.reshape(-1).numpy().tolist())
+            #     print(attention_scores.shape)
 
 
-            # #create a heatmeap of the attention scores
-            # attention_scores = attention_scores[-1].reshape(81,81)
-            # attention_scores = attention_scores.detach().numpy()
-            # #plot as heatmap
-            # import seaborn as sns
-            # import matplotlib.pyplot as plt
-            # # sns.heatmap(attention_scores)
-            # # #save plot
-            # # plt.savefig('attention_scores.png')
+            #     # get the attention scores sum of each row
+            #     attention_scores = attention_scores.reshape(81,81)
+            #     attention_scores = attention_scores.detach().numpy()
 
-            # #for each attention score, create a heatmap
-            # for i in range(len(attention_scores)):
-            #     fig, ax = plt.subplots(1,1)
+            #     #for each empty cell extract the attention scores
+            #     empty_cells = np.where(INs[index].reshape(1,-1) == 0)[1]
+
+            #     if i == 9:
+            #         #create a hetmap plot of each empty cell
+            #         for i_empty, cell in enumerate(empty_cells):
+            #             scores = attention_scores[cell]
+            #             scores = scores.reshape(9,9)
+            #             import matplotlib.pyplot as plt
+            #             # create a figure
+            #             fig, ax = plt.subplots(figsize=(9,9))
+            #             # plot heatmap use color map gray: use seaborn
+            #             import seaborn as sns
+            #             sns.heatmap(scores, cmap='gray', ax=ax)
+            #             # save the figure
+            #             filename = temp_outpath + 'attention_scores_{}_{}.png'.format(cell // 9, cell % 9)
+            #             fig.savefig(filename, bbox_inches='tight')
+            #             # close the figure
+            #             plt.close(fig)
+
+
+
+
+
+            #     #for rach row get the sum of the attention scores
+            #     attention_scores_mean = np.sum(attention_scores, axis=0)
+
+            #     print(attention_scores_mean)
+
+            #     #create a heatmp of the attention scores
+            #     attention_scores_mean = attention_scores_mean.reshape(9,9)
+
+            #     #get a list of indices where there attention scores are in descending order
+            #     attention_scores_indices_sorted = np.argsort(attention_scores_mean, axis=None)[::-1]
+                
+            #     #convert 1D indices to 2D indices
+            #     attention_scores_indices_sorted = np.unravel_index(attention_scores_indices_sorted, attention_scores_mean.shape)
+
+            #     #convert to list
+            #     attention_scores_indices_sorted = list(attention_scores_indices_sorted)
+            #     x = [attention_scores_indices_sorted[0], attention_scores_indices_sorted[1]]
+            #     x = np.array(x).T.tolist()
+            #     attention_scores_indices_sorted = x
+
+            #     #write it into a file
+            #     with open('{}attention_scores_indices_sorted_{}.txt'.format(temp_outpath, i), 'w') as f:
+            #         writer = csv.writer(f)
+            #         writer.writerows(attention_scores_indices_sorted)
+            
             #     #plot as heatmap
-            #     sns.heatmap(attention_scores[i].reshape(81,81).detach().numpy())
+            #     import seaborn as sns
+            #     import matplotlib.pyplot as plt
+
+            #     #plot as heatmap and add input as label for each cell in heatmap and use gray scale colorbar
+            #     sns.heatmap(attention_scores_mean, annot=INs[index].reshape(9,9), fmt='d', cmap='gray')
+
+            #     # sns.heatmap(attention_scores_mean, annot=INs[index].reshape(9,9), fmt='d')
+            #     # sns.heatmap(attention_scores_mean)
+
+            #     #add title
+            #     plt.title('Attention Scores, Layer: {}'.format(i+1))
+
+            #     #make x ticks and y ticks hidden
+            #     plt.xticks([])
+            #     plt.yticks([])
+
+
             #     #save plot
-            #     plt.savefig('attention_scores_{}.png'.format(i))
+            #     plt.savefig('{}attention_scores_{}.png'.format(temp_outpath, i), bbox_inches='tight')
             #     plt.close()
-            # #create a hemap plot of input sudoku and label the numbers
+
+            #     #write attention scores to file
+            #     with open('{}attention_scores_{}.txt'.format(temp_outpath, i), 'w') as f:
+            #         writer = csv.writer(f)
+            #         writer.writerows(attention_scores_mean)
+
+            #     # #get index of max attention score
+            #     # max_index = np.argmax(attention_scores)
+            #     # print(max_index)
+            #     # # print max index in 2D format
+            #     # print('max index: {}'.format((max_index//9, max_index%9)))
+
+
+
+            # # attention_scores = np.sum(attention_scores, axis=1)
+
+            # # print(attention_scores)
+
+
+            # # #create a heatmeap of the attention scores
+            # # attention_scores = attention_scores[-1].reshape(81,81)
+            # # attention_scores = attention_scores.detach().numpy()
+            # # #plot as heatmap
+            # # import seaborn as sns
+            # # import matplotlib.pyplot as plt
+            # # # sns.heatmap(attention_scores)
+            # # # #save plot
+            # # # plt.savefig('attention_scores.png')
+
+            # # #for each attention score, create a heatmap
+            # # for i in range(len(attention_scores)):
+            # #     fig, ax = plt.subplots(1,1)
+            # #     #plot as heatmap
+            # #     sns.heatmap(attention_scores[i].reshape(81,81).detach().numpy())
+            # #     #save plot
+            # #     plt.savefig('attention_scores_{}.png'.format(i))
+            # #     plt.close()
+            # # #create a hemap plot of input sudoku and label the numbers
             print(INs[index].reshape(9,9))
 
 
@@ -353,6 +461,23 @@ class Sudoku:
             target = OUTs[index].reshape(-1)
             # print(pred.shape, target.shape)
             assert(pred.shape == target.shape)
+
+            #write input, pred and target to file
+            with open('output/data_{}/input.txt'.format(index), 'w') as f:
+                writer = csv.writer(f, delimiter=' ')
+                writer.writerows(INs[index].reshape(9,9).numpy().tolist())
+            with open('output/data_{}/pred.txt'.format(index), 'w') as f:
+                writer = csv.writer(f, delimiter=' ')
+                writer.writerows(pred.reshape(9,9).numpy().tolist())
+            with open('output/data_{}/target.txt'.format(index), 'w') as f:
+                writer = csv.writer(f, delimiter=' ')
+                writer.writerows(target.reshape(9,9).numpy().tolist())
+
+            #dump input as list string so that it can be parse using ast.literal_eval later
+            with open('output/data_{}/input_eval.txt'.format(index), 'w') as f:
+               f.write(str(INs[index].reshape(9,9).numpy().tolist()))
+                
+
             #if prediction is correct
             if (pred == target).all():
                 #increase accuracy
