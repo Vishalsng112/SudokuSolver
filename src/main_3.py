@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import gc
 import pickle 
 import time 
-
+import matplotlib.pyplot as plt
 class Sudoku:
     def __init__(self):
         pass
@@ -267,9 +267,9 @@ class Sudoku:
         #     OUTs = np.load('data/sudoku_outputs_pretrain.npz')
         #     OUTs = OUTs.f.arr_0
 
-        INs = np.load('data/train_inputs.npz')
+        INs = np.load('data/test_inputs.npz')
         INs = INs.f.arr_0
-        OUTs = np.load('data/train_outputs.npz')
+        OUTs = np.load('data/test_outputs.npz')
         OUTs = OUTs.f.arr_0
         #load model
         # model = SudokuTransformer()
@@ -295,7 +295,11 @@ class Sudoku:
         
         accuracies = []
         # for index in range(1000):
-        for index in range(10):
+        dp = INs.shape[0]
+        for index in range(23264, INs.shape[0]):
+            print('INdex: {}/{}'.format(index, dp))
+            # if index != 23264 :
+            #     continue
             #prepare attention mask
             attention_mask = INs[index].reshape(1,-1) != 0
             with torch.no_grad():
@@ -315,21 +319,21 @@ class Sudoku:
             unfilled_cells = np.where(INs[index].reshape(1,-1) == 0)[1]
 
 
-            #create a hetmap plot of each empty cell
-            for i_empty, cell in enumerate(unfilled_cells):
-                scores = attention_scores[cell]
-                scores = scores.reshape(9,9)
-                import matplotlib.pyplot as plt
+            # #create a hetmap plot of each empty cell
+            # for i_empty, cell in enumerate(unfilled_cells):
+            #     scores = attention_scores[cell]
+            #     scores = scores.reshape(9,9)
+            #     import matplotlib.pyplot as plt
                 
-                #create a figure
-                fig, ax = plt.subplots()
+            #     #create a figure
+            #     fig, ax = plt.subplots()
 
-                #create a heatmap using seaborn
-                import seaborn as sns
-                sns.heatmap(scores, annot=True, ax = ax, cmap='gray', fmt='.2f', annot_kws={"size": 8}) # font size
-                #save the figure
-                plt.savefig(temp_outpath + 'heatmap_{}_{}.png'.format(cell //9, cell % 9), bbox_inches='tight')
-                plt.close()
+            #     #create a heatmap using seaborn
+            #     import seaborn as sns
+            #     sns.heatmap(scores, annot=True, ax = ax, cmap='gray', fmt='.2f', annot_kws={"size": 8}) # font size
+            #     #save the figure
+            #     plt.savefig(temp_outpath + 'heatmap_{}_{}.png'.format(cell //9, cell % 9), bbox_inches='tight')
+            #     plt.close()
 
             
             
@@ -451,13 +455,13 @@ class Sudoku:
             # #     plt.savefig('attention_scores_{}.png'.format(i))
             # #     plt.close()
             # # #create a hemap plot of input sudoku and label the numbers
-            print(INs[index].reshape(9,9))
+            # print(INs[index].reshape(9,9))
 
 
             pred = torch.argmax(pred, dim=-1)
             input = INs[index].reshape(-1)
             pred = pred.reshape(-1)
-            print(pred.reshape(9,9))
+            # print(pred.reshape(9,9))
             target = OUTs[index].reshape(-1)
             # print(pred.shape, target.shape)
             assert(pred.shape == target.shape)
@@ -482,8 +486,94 @@ class Sudoku:
             if (pred == target).all():
                 #increase accuracy
                 correct += 1
-                if correct > 2: 
-                    print(1/0)
+
+
+                # #create a hetmap plot of each empty cell
+                # for i_empty, cell in enumerate(unfilled_cells):
+                #     scores = attention_scores[cell]
+                #     scores = scores.reshape(9,9)
+                    
+                    
+                #     #create a figure
+                #     fig, ax = plt.subplots()
+
+                #     #create a heatmap using seaborn
+                #     import seaborn as sns
+                #     sns.heatmap(scores, annot=True, ax = ax, cmap='gray', fmt='.2f', annot_kws={"size": 8}) # font size
+                #     #save the figure
+                #     plt.savefig(temp_outpath + 'heatmap_{}_{}.png'.format(cell //9, cell % 9), bbox_inches='tight')
+                #     plt.close()
+
+                #     #store the attention scores as a csv file
+                #     with open(temp_outpath + 'attention_scores_{}_{}.txt'.format(cell //9, cell % 9), 'w') as f:
+                #         writer = csv.writer(f)
+                #         writer.writerows(scores.numpy().tolist())
+
+
+                print('starting validation')
+                #get indices where input is 0
+                indices = torch.where(input == 0)[0]
+                #for each indices we will perform validation
+                import copy
+                flag = True
+
+
+                old_assert = None
+                for ind_ in indices:
+                    print('index: {}'.format(ind_))
+                    print('indices in format of (row, col): {}'.format((ind_ // 9, ind_ % 9)))
+                    inp = copy.deepcopy(input)
+                    #get attention of the particular cell
+                    attn = attention_scores[ind_]
+
+                    # attn = attention_scores[-1]
+                    #create a mask of all 1s where attention is greater than 0.0
+                    mask = attn > 0     #TODO: change this to 0.0
+                    new_sudoku = copy.deepcopy(pred) ###########TODO: change this to input
+                    new_sudoku = new_sudoku*mask
+
+                    #store attention mask
+                    with open('output/data_{}/attention_mask_{}_{}.txt'.format(index, ind_ // 9, ind_ % 9), 'w') as f:
+                        writer = csv.writer(f)
+                        writer.writerows((mask*1).reshape(9,9).numpy().tolist())
+                    
+                    new_sudoku[ind_] = 0
+
+                    from z3sudoku import z3Sudoku
+                    s = z3Sudoku(board = new_sudoku.reshape(9,9).numpy().tolist())
+                    # s.addConstraints()
+                    
+                    #add known values to z3 solver
+                    for temp_index in range(81):
+                        if new_sudoku[temp_index] != 0:
+                            s.addKnownValues([(temp_index // 9, temp_index % 9, input[temp_index].item())])
+                    # s.addKnownValues()
+                    s.addKnowValuesWithNot([(ind_ // 9, ind_ % 9, pred[ind_].item())])
+                    # write the content of s.solver as string into a file
+                    with open('output/data_{}/z3_solver_cell_{}_{}.txt'.format(index, ind_ // 9, ind_ % 9), 'w') as f:
+                        writer = csv.writer(f, delimiter=' ')
+                        for c in s.solver.assertions():
+                            writer.writerow([c])
+                    # print(1/0)
+                    if s.solve():
+                        # print(s.printModel())
+                        print("Attention is not correct")
+                        flag = False
+                    else:
+                        print("Attention is correct")
+                #save that transformer is learned or not into a csv file
+                with open('output/data_{}/transformer_learned.csv'.format(index), 'w') as f:
+                    writer = csv.writer(f, delimiter=' ')
+                    writer.writerow([flag])
+                    if not flag:
+                        print("Transformer is not learned, it's memorizing")
+                        print(index)
+                        return 0
+                    else:
+                        print('transformer is learned')
+#                    print(1/0)
+            # if index == 2054:
+            #     print(1/0)
 
             #get indices where input is 0
             indices = torch.where(input == 0)[0]
