@@ -298,8 +298,8 @@ class Sudoku:
         dp = INs.shape[0]
         for index in range(23264, INs.shape[0]):
             print('INdex: {}/{}'.format(index, dp))
-            # if index != 23264 :
-            #     continue
+            if index != 23264 :
+                continue
             #prepare attention mask
             attention_mask = INs[index].reshape(1,-1) != 0
             with torch.no_grad():
@@ -528,7 +528,7 @@ class Sudoku:
 
                     # attn = attention_scores[-1]
                     #create a mask of all 1s where attention is greater than 0.0
-                    mask = attn > 0     #TODO: change this to 0.0
+                    mask = attn > 1e-4     #TODO: change this to 0.0
                     new_sudoku = copy.deepcopy(pred) ###########TODO: change this to input
                     new_sudoku = new_sudoku*mask
 
@@ -546,7 +546,8 @@ class Sudoku:
                     #add known values to z3 solver
                     for temp_index in range(81):
                         if new_sudoku[temp_index] != 0:
-                            s.addKnownValues([(temp_index // 9, temp_index % 9, input[temp_index].item())])
+                            # print(new_sudoku[temp_index])
+                            s.addKnownValues([(temp_index // 9, temp_index % 9, new_sudoku[temp_index].item())])
                     # s.addKnownValues()
                     s.addKnowValuesWithNot([(ind_ // 9, ind_ % 9, pred[ind_].item())])
                     # write the content of s.solver as string into a file
@@ -561,6 +562,16 @@ class Sudoku:
                         flag = False
                     else:
                         print("Attention is correct")
+                        #since it is giving unsat, lets see what is the unsat core
+                        print('clauses of unsat core', s.solver.unsat_core())
+
+                        #write the clauses in csv file
+                        with open('output/data_{}/unsat_core_{}_{}.txt'.format(index, ind_ // 9, ind_ % 9), 'w') as f:
+                            writer = csv.writer(f, delimiter=' ')
+                            for clause in s.solver.unsat_core():
+                                writer.writerow([clause, s.constraintsMap[str(clause)]])
+                            # print(clause, s.constraintsMap[str(clause)])
+                        # print(1/0)
                 #save that transformer is learned or not into a csv file
                 with open('output/data_{}/transformer_learned.csv'.format(index), 'w') as f:
                     writer = csv.writer(f, delimiter=' ')

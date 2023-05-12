@@ -9,35 +9,62 @@ class z3Sudoku:
         #create 9x9 matrix of integers
         self.matrix = [[Int("x_%s_%s" % (i, j)) for j in range(9)] for i in range(9)]
         #add constraints
+        self.current_clause_count = 0
+        self.constraintsMap = {}
+        self.constraintsReverseMap = {}
         self.addConstraints()
-    
+
+        
     def addConstraints(self):
         #add constraints for each row
         for i in range(9):
-            self.solver.add(Distinct(self.matrix[i]))
+            # self.solver.add(Distinct(self.matrix[i]))
+            self.solver.assert_and_track(Distinct(self.matrix[i]), 'c_{}'.format(self.current_clause_count))
+            self.constraintsMap['c_{}'.format(self.current_clause_count)] = Distinct(self.matrix[i])
+            self.current_clause_count += 1
+
         #add constraints for each column
         for j in range(9):
-            self.solver.add(Distinct([self.matrix[i][j] for i in range(9)]))
+            # self.solver.add(Distinct([self.matrix[i][j] for i in range(9)]))
+            self.solver.assert_and_track(Distinct([self.matrix[i][j] for i in range(9)]), 'c_{}'.format(self.current_clause_count))
+            self.constraintsMap['c_{}'.format(self.current_clause_count)] = Distinct([self.matrix[i][j] for i in range(9)])
+            self.current_clause_count += 1
+
         #add constraints for each 3x3 square
         for i in range(3):
             for j in range(3):
-                self.solver.add(Distinct([self.matrix[3*i+k][3*j+l] for k in range(3) for l in range(3)]))
+                # self.solver.add(Distinct([self.matrix[3*i+k][3*j+l] for k in range(3) for l in range(3)]))
+                self.solver.assert_and_track(Distinct([self.matrix[3*i+k][3*j+l] for k in range(3) for l in range(3)]), 'c_{}'.format(self.current_clause_count))
+                self.constraintsMap['c_{}'.format(self.current_clause_count)] = Distinct([self.matrix[3*i+k][3*j+l] for k in range(3) for l in range(3)])
+                self.current_clause_count += 1
+
+
         #add constraints for each cell
         for i in range(9):
             for j in range(9):
-                self.solver.add(And(self.matrix[i][j] >= 1, self.matrix[i][j] <= 9))
+                # self.solver.add(And(self.matrix[i][j] >= 1, self.matrix[i][j] <= 9))
+                self.solver.assert_and_track(And(self.matrix[i][j] >= 1, self.matrix[i][j] <= 9), 'c_{}'.format(self.current_clause_count))
+                self.constraintsMap['c_{}'.format(self.current_clause_count)] = And(self.matrix[i][j] >= 1, self.matrix[i][j] <= 9)
+                self.current_clause_count += 1
     
     def addKnownValues(self, knownValues):
         #add constraints for known values
         for (i, j, val) in knownValues:
             # print(type(i), type(j), type(val))
-            self.solver.add(self.matrix[i][j] == int(val))
+            # self.solver.add(self.matrix[i][j] == int(val))
+            self.solver.assert_and_track(self.matrix[i][j] == int(val), 'c_{}'.format(self.current_clause_count))
+            self.constraintsMap['c_{}'.format(self.current_clause_count)] = self.matrix[i][j] == int(val)
+            self.current_clause_count += 1
+
 
     def addKnowValuesWithNot(self, knownValues):
         #add constraints for known values
         for (i, j, val) in knownValues:
             # print(type(i), type(j), type(val))
-            self.solver.add(self.matrix[i][j] != int(val))
+            # self.solver.add(self.matrix[i][j] != int(val))
+            self.solver.assert_and_track(self.matrix[i][j] != int(val), 'c_{}'.format(self.current_clause_count))
+            self.constraintsMap['c_{}'.format(self.current_clause_count)] = self.matrix[i][j] != int(val)
+            self.current_clause_count += 1    
 
     def solve(self):
         #check if there is a solution

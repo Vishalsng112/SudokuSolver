@@ -10,7 +10,10 @@ s = Solver()
 #add constraints
 s.assert_and_track(a, 'p1')
 # add ~a ^b
+s.assert_and_track(And(Not(b), b), 'p3')
 s.assert_and_track(And(Not(a), a), 'p2')
+
+
 # # add ~a v ~b
 # s.assert_and_track(Or(Not(a), Not(b)), 'p3')
 # # add b v c
