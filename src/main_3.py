@@ -10,6 +10,34 @@ import pickle
 import time 
 import matplotlib.pyplot as plt
 from z3 import *
+import argparse
+import json
+import copy
+from sklearn.model_selection import train_test_split
+import os
+import seaborn as sns
+import matplotlib.pyplot as plt
+from z3sudoku import z3Sudoku
+
+
+parser = argparse.ArgumentParser(description='Sudoku Transformer')
+parser.add_argument('--outpath', type=str, help='output path')
+parser.add_argument('--batch_index', type=int, help='batch index')
+parser.add_argument('--all_cell', action='store_true', help='all cell')
+parser.add_argument('--only_empty_cell', action='store_true', help='only empty cell')
+args = parser.parse_args()
+
+if args.outpath is None:
+    raise RuntimeError('Please provide output path')
+if args.batch_index is None:
+    global_batch_index = 0
+else:
+    global_batch_index = args.batch_index
+
+
+if args.all_cell ==False  and  args.only_empty_cell ==False:
+    raise RuntimeError('Please provide either --all_cell or --only_empty_cell')
+
 class Sudoku:
     def __init__(self):
         pass
@@ -109,7 +137,6 @@ class Sudoku:
         pretraining means here we are creating our own data for the model to learn
 
         """
-        import copy
         # #load inputs and outputs
         # inputs = np.load('data/sudoku_inputs.npz')
         # inputs = inputs.f.arr_0
@@ -163,7 +190,6 @@ class Sudoku:
         print('data dumped')
 
         #use sklearn to split the data
-        from sklearn.model_selection import train_test_split
         #split the data into train and test
         train_inputs, test_inputs, train_outputs, test_outputs = train_test_split(inputs, outputs, test_size=0.2, random_state=42)
         #split the train data into train and validation
@@ -230,13 +256,11 @@ class Sudoku:
         model2 = train(model = model, train_data= train_loader, epochs=20, lr = 0.001)
 
         #if model folder does not exist, create it
-        import os
         if not os.path.exists('model'):
             os.makedirs('model')
         pickle.dump(model2, open('model/sudoku_transformer.pkl', 'wb'))
 
         #id model folder does not exist, create it
-        import os
         if not os.path.exists('model'):
             os.makedirs('model')
 
@@ -273,16 +297,15 @@ class Sudoku:
         correct =  0
         total = len(INs)
 
-        import os
-        if not os.path.exists('output'):
-            os.makedirs('output')
+        # if not os.path.exists('output'):
+        #     os.makedirs('output')
         
         accuracies = []
         # for index in range(1000):
         dp = INs.shape[0]
 
-        batch_size = 100
-        for batch_index in range(0, INs.shape[0], batch_size):
+        batch_size = 10000
+        for batch_index in range(global_batch_index, INs.shape[0], batch_size):
             print('processing batch from {} to {}'.format(batch_index, batch_index + batch_size))
             #get the batch of input
             INs_batch = INs[batch_index: batch_index + batch_size]
@@ -311,33 +334,39 @@ class Sudoku:
                 if (pred == target).all():
                     correct += 1
 
-                    temp_outpath = 'output/data_{}/'.format(batch_index + index)
+                    temp_outpath = '{}data_{}/'.format(args.outpath, batch_index + index)
                     if not os.path.exists(temp_outpath):
                         os.makedirs(temp_outpath)
                     
                     #write input, pred and target to file
-                    with open('output/data_{}/input.txt'.format(batch_index + index), 'w') as f:
+                    with open('{}data_{}/input.txt'.format(args.outpath, batch_index + index), 'w') as f:
                         writer = csv.writer(f, delimiter=' ')
                         writer.writerows(INs_batch[index].reshape(9,9).numpy().tolist())
-                    with open('output/data_{}/pred.txt'.format(batch_index + index), 'w') as f:
+                    with open('{}data_{}/pred.txt'.format(args.outpath, batch_index + index), 'w') as f:
                         writer = csv.writer(f, delimiter=' ')
                         writer.writerows(pred.reshape(9,9).numpy().tolist())
-                    with open('output/data_{}/target.txt'.format(batch_index + index), 'w') as f:
+                    with open('{}data_{}/target.txt'.format(args.outpath, batch_index + index), 'w') as f:
                         writer = csv.writer(f, delimiter=' ')
                         writer.writerows(target.reshape(9,9).numpy().tolist())
                     
                     #dump input as list string so that it can be parse using ast.literal_eval later
-                    with open('output/data_{}/input_eval.txt'.format(batch_index + index), 'w') as f:
+                    with open('{}data_{}/input_eval.txt'.format(args.outpath, batch_index + index), 'w') as f:
                         f.write(str(INs_batch[index].reshape(9,9).numpy().tolist()))
 
 
                     print('starting validation')
                     #get indices where input is 0
-                    indices = torch.where(input == 0)[0]
+                    if args.all_cell:
+                        indices = torch.arange(81)
+                    elif args.only_empty_cell:
+                        indices = torch.where(input == 0)[0]
+                    else:
+                        raise RuntimeError('Please provide either --all_cell or --only_empty_cell')
+                
                     #for each indices we will perform validation
-                    import copy
                     flag = True
 
+                    attention_Valid = {}
                     for ind_ in indices:
                         print('index: {}'.format(ind_))
                         print('indices in format of (row, col): {}'.format((ind_ // 9, ind_ % 9)))
@@ -347,18 +376,22 @@ class Sudoku:
 
                         # attn = attention_scores[-1]
                         #create a mask of all 1s where attention is greater than 0.0
-                        mask = 1*(attn > 0)     #TODO: change this to 0.0
+                        mask = 1*(attn > 1e-5)     #TODO: change this to 0.0
                         new_sudoku = copy.deepcopy(pred) ###########TODO: change this to input
                         new_sudoku = new_sudoku*mask
 
                         #store attention mask
-                        with open('output/data_{}/attention_mask_{}_{}.txt'.format(batch_index + index, ind_ // 9, ind_ % 9), 'w') as f:
+                        with open('{}data_{}/attention_mask_{}_{}_{}.txt'.format(args.outpath, batch_index + index, ind_ // 9, ind_ % 9, int(mask.sum())), 'w') as f:
                             writer = csv.writer(f)
                             writer.writerows((mask).reshape(9,9).numpy().tolist())
                         
                         new_sudoku[ind_] = 0
 
-                        from z3sudoku import z3Sudoku
+                        #save this new sudoku with respective filename
+                        with open('{}data_{}/new_sudoku_{}_{}.txt'.format(args.outpath, batch_index + index, ind_ // 9, ind_ % 9), 'w') as f:
+                            writer = csv.writer(f)
+                            writer.writerows((new_sudoku).reshape(9,9).numpy().tolist())        
+
                         s = z3Sudoku(board = new_sudoku.reshape(9,9).numpy().tolist())
                         # s.addConstraints()
                         
@@ -370,7 +403,7 @@ class Sudoku:
                         # s.addKnownValues()
                         s.addKnowValuesWithNot([(ind_ // 9, ind_ % 9, pred[ind_].item())])
                         # write the content of s.solver as string into a file
-                        with open('output/data_{}/z3_solver_cell_{}_{}.txt'.format(batch_index + index, ind_ // 9, ind_ % 9), 'w') as f:
+                        with open('{}data_{}/z3_solver_cell_{}_{}.txt'.format(args.outpath, batch_index + index, ind_ // 9, ind_ % 9), 'w') as f:
                             writer = csv.writer(f, delimiter=' ')
                             for c in s.solver.assertions():
                                 writer.writerow([c])
@@ -379,13 +412,16 @@ class Sudoku:
                             # print(s.printModel())
                             print("Attention is not correct")
                             flag = False
+                            #add the attention mask into the attention_Valid
+                            attention_Valid['{}_{}'.format(ind_ // 9, ind_ % 9)] = 0
                         else:
                             print("Attention is correct")
+                            attention_Valid['{}_{}'.format(ind_ // 9, ind_ % 9)] = 1
                             #since it is giving unsat, lets see what is the unsat core
                             # print('clauses of unsat core', s.solver.unsat_core())
                             
 
-                            unsat_core_filename = 'output/data_{}/unsat_core_{}_{}_{}.txt'.format(batch_index + index, ind_ // 9, ind_ % 9, int(mask.sum()))
+                            unsat_core_filename = '{}data_{}/unsat_core_{}_{}_{}.txt'.format(args.outpath, batch_index + index, ind_ // 9, ind_ % 9, int(mask.sum()))
                             #write the clauses in csv file
                             with open(unsat_core_filename, 'w') as f:
                                 writer = csv.writer(f, delimiter=' ')
@@ -410,49 +446,58 @@ class Sudoku:
                                 # print(s.constraintsMap[str(clause)], str(clause))
                                 for current_clause in s.constraintsMap.keys():
                                     # print(str(clause), current_clause)
-                                    if str(clause) != current_clause or str(current_clause) not in satisfied_cores or str(current_clause) not in min_unsatisfiable_cores:
-                                        #TODO: FIX THIS PART: properly check minSAT
-                                        s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
+                                    if current_clause != str(clause) :
+                                        if str(current_clause) not in satisfied_cores:
+                                            if str(current_clause) not in min_unsatisfiable_cores:
+                                                #TODO: FIX THIS PART: properly check minSAT
+                                                s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
                                     else:
                                         print('skipping')
                                 
                                 #add all clauses present into the min_unsatisfiable_cores
                                 # print(s2.solver)
-                                # for current_clause in min_unsatisfiable_cores.keys():
-                                #     s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
+                                for current_clause in min_unsatisfiable_cores.keys():
+                                    s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
 
-                                # if str(clause) not in s2.constraintsMap:
-                                #     print(s2.constraintsMap[str(clause)], str(clause))
-                                #     # s2.solver.assert_and_track(s2.constraintsMap[str(clause)], str(clause))
-                                # print(s2.solver)
-
-                                # print("===========>Hello World")
                                 #check if it is sat
                                 if s2.solver.check() == sat:
-                                    print(str(clause), s.constraintsMap[str(clause)], 'it is NOT minmal clasue')
-                                    #print(the solution)
-                                    print(s2.printModel())
+                                    # print(str(clause), s.constraintsMap[str(clause)], 'it is NOT minmal clasue')
+                                    # #print(the solution)
+                                    # print(s2.printModel())
                                     satisfied_cores[str(clause)] = s.constraintsMap[str(clause)]
                                     continue
                                 else:
-                                    print(str(clause), s.constraintsMap[str(clause)], 'it is a minmal clasue')
+                                    # print(str(clause), s.constraintsMap[str(clause)], 'it is a minmal clasue')
                                     min_unsatisfiable_cores[str(clause)] = s.constraintsMap[str(clause)]
-                            print(min_unsatisfiable_cores)
-                        print(1/0)
+                            # print(min_unsatisfiable_cores)
+                            #dump the min_unsatisfiable_cores into a file
+                            with open('{}data_{}/min_unsatisfiable_cores_{}_{}.txt'.format(args.outpath, batch_index + index, ind_ // 9, ind_ % 9), 'w') as f:
+                                writer = csv.writer(f, delimiter=' ')
+                                for clause in min_unsatisfiable_cores.keys():
+                                    writer.writerow([clause, min_unsatisfiable_cores[clause]])
 
+                    # save the attention_valid into a json file
+                    with open('{}data_{}/attention_valid.json'.format(args.outpath, batch_index + index), 'w') as f:
+                        json.dump(attention_Valid, f, indent=2)
 
                     #save that transformer is learned or not into a csv file
-                    with open('output/data_{}/transformer_learned.csv'.format(batch_index + index), 'w') as f:
-                        writer = csv.writer(f, delimiter=' ')
-                        writer.writerow([flag])
-                        if not flag:
-                            print("Transformer is not learned, it's memorizing")
-                            print(index)
-                            return 0
-                        else:
-                            print('transformer is learned')
-                            print('datapoint index {}'.format(batch_index + index))
-                            print(1/0)
+                    if flag:
+                        with open('{}data_{}/transformer_learned_yes.csv'.format(args.outpath,batch_index + index), 'w') as f:
+                            writer = csv.writer(f, delimiter=' ')
+                            writer.writerow([flag])
+                    else:
+                        with open('{}data_{}/transformer_learned_no.csv'.format(args.outpath, batch_index + index), 'w') as f:
+                            writer = csv.writer(f, delimiter=' ')
+                            writer.writerow([flag])
+                        # if not flag:
+                        #     print("Transformer is not learned, it's memorizing")
+                        #     print(index)
+                        #     return 0
+                        # else:
+                        #     print('transformer is learned')
+                        #     print('datapoint index {}'.format(batch_index + index))
+
+                    # print(1/0)
                 #get indices where input is 0
                 indices = torch.where(input == 0)[0]
                 
@@ -828,7 +873,6 @@ class Sudoku:
         correct =  0
         total = len(INs)
 
-        import os
         if not os.path.exists('output'):
             os.makedirs('output')
         
@@ -838,6 +882,7 @@ class Sudoku:
         batch_size = 10000
         last_layer_attention_scores =None
         start = time.time()
+        success_indices = []
         with torch.no_grad():
             # for each batch size of input pass it to the model
             for i in range(0, INs.shape[0], batch_size):
@@ -849,7 +894,19 @@ class Sudoku:
                 #pass the batch of input to the model
                 pred, attention_scores_list = model(INs_batch, attention_mask = INs_batch != 0, test = True)
                 
-                print(pred.shape)
+                pred  = torch.argmax(pred, dim=-1)
+                print('prediction"s shape', pred.shape)
+                print('OUTs_batch"s shape', OUTs_batch.shape)
+                #check how many predictions are correct
+                count = pred == OUTs_batch
+                #sum the count row vice
+                count = count.sum(dim=1)
+                count = count.reshape(-1) 
+                count = (count == 81) * 1
+                print(count[:10])
+                success_indices += count.numpy().tolist()
+                count = count.sum().item()
+                print('counts', count)
                 print(attention_scores_list[-1].shape)
                 if last_layer_attention_scores is None:
                     last_layer_attention_scores = attention_scores_list[-1].numpy().reshape(batch_size, -1)
@@ -857,20 +914,21 @@ class Sudoku:
                     last_layer_attention_scores = np.concatenate((last_layer_attention_scores, attention_scores_list[-1].numpy().reshape(batch_size, -1)), axis=0)
                 # #get the attention scores of last layer
                 # last_layer_attention_scores.append(attention_scores_list[-1].numpy().reshape(batch_size, -1))
+
+                print(len(success_indices))
         end = time.time()
         print('Time: {}'.format(end-start))
 
-        #convert last_layer_attention_scores to numpy array
-        last_layer_attention_scores = np.array(last_layer_attention_scores)
-
+        # #convert last_layer_attention_scores to numpy array
+        # last_layer_attention_scores = np.array(last_layer_attention_scores)
+        indices = np.where(np.array(success_indices) == 1)[0]
         #dump last_layer_attention_scores as numpy array
-        np.savez_compressed('data/last_layer_attention_scores.npz', last_layer_attention_scores)
+        np.savez_compressed('data/last_layer_attention_scores.npz', last_layer_attention_scores[indices])
 
             # pred, attention_scores_list = model(INs, attention_mask = INs != 0, test = True)
         
         # print(1/0)
-    def computeOutlierThreshold(self,):
-        import numpy as np
+    def computeOutlierThreshold(self):
         #read last_layer_attention_scores
         last_layer_attention_scores = np.load('data/last_layer_attention_scores.npz')
         last_layer_attention_scores = last_layer_attention_scores.f.arr_0
@@ -879,18 +937,31 @@ class Sudoku:
         #reshape last_layer_attention_scores to 1D
         last_layer_attention_scores = last_layer_attention_scores.reshape(-1)
 
-        #plot continuous histogram
-        import matplotlib.pyplot as plt
-        fig, axs = plt.subplots(1,1)
-        plt.hist(last_layer_attention_scores, bins=100)
-        plt.savefig('output/continuous_histogram.png', bbox_inches='tight')
-        plt.close()
+        # #plot continuous histogram
+        # import matplotlib.pyplot as plt
+        # fig, axs = plt.subplots(1,1)
+        # plt.hist(last_layer_attention_scores)
+        # plt.savefig('continuous_histogram.png', bbox_inches='tight')
+        # plt.close()
+        #plot a continues distribution using seaborn
 
-        #determine the outline in the last_layer_attention_scores
-        import numpy as np
-        import matplotlib.pyplot as plt
-        from scipy.stats import norm
-        import seaborn as sns
+        last_layer_attention_scores = last_layer_attention_scores.reshape(-1, 81, 81)
+        #take minimum value in the last dimension
+        last_layer_attention_scores = np.min(last_layer_attention_scores, axis=-1)
+        print(last_layer_attention_scores.shape)
+        #reshape to 1D
+        last_layer_attention_scores = last_layer_attention_scores.reshape(-1)
+
+        sns.displot(last_layer_attention_scores)
+        #set x axis limit
+        plt.xlim(0, 0.1)
+        plt.savefig('continuous_distribution.png', bbox_inches='tight')
+
+        # #determine the outline in the last_layer_attention_scores
+        # import numpy as np
+        # import matplotlib.pyplot as plt
+        # from scipy.stats import norm
+        # import seaborn as sns
 
         #find outlier
         #find the mean and std of last_layer_attention_scores
@@ -901,6 +972,19 @@ class Sudoku:
         print('min: {}, max: {}'.format(np.min(last_layer_attention_scores), np.max(last_layer_attention_scores)))
         #find the outlier
         outlier = mean + 3*std
+        print('outlier: {}'.format(outlier))
+        outlier = mean - 3*std
+        print('outlier: {}'.format(outlier))
+        mask = last_layer_attention_scores > 1e-5
+        print(mask.sum() / (last_layer_attention_scores.shape[0]))
+
+        #convert last_layer_attention_scores to numpy array
+        last_layer_attention_scores = np.array(last_layer_attention_scores)
+        #perform z-score normalization
+        last_layer_attention_scores = (last_layer_attention_scores - mean) / std
+
+        #find the outlier
+        outlier = 3*std
         print('outlier: {}'.format(outlier))
 
 
