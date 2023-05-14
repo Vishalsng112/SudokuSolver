@@ -9,6 +9,7 @@ import gc
 import pickle 
 import time 
 import matplotlib.pyplot as plt
+from z3 import *
 class Sudoku:
     def __init__(self):
         pass
@@ -280,7 +281,7 @@ class Sudoku:
         # for index in range(1000):
         dp = INs.shape[0]
 
-        batch_size = 10
+        batch_size = 100
         for batch_index in range(0, INs.shape[0], batch_size):
             print('processing batch from {} to {}'.format(batch_index, batch_index + batch_size))
             #get the batch of input
@@ -391,6 +392,55 @@ class Sudoku:
                                 for clause in s.solver.unsat_core():
                                     writer.writerow([clause, s.constraintsMap[str(clause)]])
 
+                            #since we have the unsat core, lets see if we can remove the clauses one by one and see if it is sat
+                            #create new solver
+                            print(s.solver.unsat_core())
+
+                            min_unsatisfiable_cores = {}
+                            satisfied_cores = {}
+                            #perform for each clause present into the unsat core
+                            for clause in s.solver.unsat_core():
+                                s2 = z3Sudoku(board = new_sudoku.reshape(9,9).numpy().tolist())
+                                s2.solver.reset()
+                                # s2.addConstraints()
+                                print(s2.solver)
+                                # print(1/0)
+                                # print(clause, type(clause))
+                                # print(list(s.constraintsMap.values())[0])
+                                # print(s.constraintsMap[str(clause)], str(clause))
+                                for current_clause in s.constraintsMap.keys():
+                                    # print(str(clause), current_clause)
+                                    if str(clause) != current_clause or str(current_clause) not in satisfied_cores or str(current_clause) not in min_unsatisfiable_cores:
+                                        #TODO: FIX THIS PART: properly check minSAT
+                                        s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
+                                    else:
+                                        print('skipping')
+                                
+                                #add all clauses present into the min_unsatisfiable_cores
+                                # print(s2.solver)
+                                # for current_clause in min_unsatisfiable_cores.keys():
+                                #     s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
+
+                                # if str(clause) not in s2.constraintsMap:
+                                #     print(s2.constraintsMap[str(clause)], str(clause))
+                                #     # s2.solver.assert_and_track(s2.constraintsMap[str(clause)], str(clause))
+                                # print(s2.solver)
+
+                                # print("===========>Hello World")
+                                #check if it is sat
+                                if s2.solver.check() == sat:
+                                    print(str(clause), s.constraintsMap[str(clause)], 'it is NOT minmal clasue')
+                                    #print(the solution)
+                                    print(s2.printModel())
+                                    satisfied_cores[str(clause)] = s.constraintsMap[str(clause)]
+                                    continue
+                                else:
+                                    print(str(clause), s.constraintsMap[str(clause)], 'it is a minmal clasue')
+                                    min_unsatisfiable_cores[str(clause)] = s.constraintsMap[str(clause)]
+                            print(min_unsatisfiable_cores)
+                        print(1/0)
+
+
                     #save that transformer is learned or not into a csv file
                     with open('output/data_{}/transformer_learned.csv'.format(batch_index + index), 'w') as f:
                         writer = csv.writer(f, delimiter=' ')
@@ -402,7 +452,7 @@ class Sudoku:
                         else:
                             print('transformer is learned')
                             print('datapoint index {}'.format(batch_index + index))
-                            # print(1/0)
+                            print(1/0)
                 #get indices where input is 0
                 indices = torch.where(input == 0)[0]
                 
