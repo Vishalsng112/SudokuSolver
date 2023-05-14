@@ -410,12 +410,12 @@ class Sudoku:
                         # print(1/0)
                         if s.solve():
                             # print(s.printModel())
-                            print("Attention is not correct")
+                            # print("Attention is not correct")
                             flag = False
                             #add the attention mask into the attention_Valid
                             attention_Valid['{}_{}'.format(ind_ // 9, ind_ % 9)] = 0
                         else:
-                            print("Attention is correct")
+                            # print("Attention is correct")
                             attention_Valid['{}_{}'.format(ind_ // 9, ind_ % 9)] = 1
                             #since it is giving unsat, lets see what is the unsat core
                             # print('clauses of unsat core', s.solver.unsat_core())
@@ -430,7 +430,7 @@ class Sudoku:
 
                             #since we have the unsat core, lets see if we can remove the clauses one by one and see if it is sat
                             #create new solver
-                            print(s.solver.unsat_core())
+                            # print(s.solver.unsat_core())
 
                             min_unsatisfiable_cores = {}
                             satisfied_cores = {}
@@ -439,7 +439,7 @@ class Sudoku:
                                 s2 = z3Sudoku(board = new_sudoku.reshape(9,9).numpy().tolist())
                                 s2.solver.reset()
                                 # s2.addConstraints()
-                                print(s2.solver)
+                                # print(s2.solver)
                                 # print(1/0)
                                 # print(clause, type(clause))
                                 # print(list(s.constraintsMap.values())[0])
@@ -451,8 +451,6 @@ class Sudoku:
                                             if str(current_clause) not in min_unsatisfiable_cores:
                                                 #TODO: FIX THIS PART: properly check minSAT
                                                 s2.solver.assert_and_track(s.constraintsMap[str(current_clause)], str(current_clause))
-                                    else:
-                                        print('skipping')
                                 
                                 #add all clauses present into the min_unsatisfiable_cores
                                 # print(s2.solver)
@@ -504,7 +502,7 @@ class Sudoku:
                 count = (pred[indices] == target[indices]).sum().item()
                 accuracies.append(count/(indices.shape[0]))
 
-        print(accuracies)
+        # print(accuracies)
         print('Accuracy: {}'.format(correct/total))  
         print(np.mean(accuracies))
         end = time.time()
